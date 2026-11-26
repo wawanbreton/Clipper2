@@ -630,6 +630,24 @@ void ClipperOffset::OffsetPoint(Group& group, const Path64& path, size_t j, size
 		// short segments, is to insert 3 points that produce negative regions. These regions 
 		// will be removed later by the finishing union operation. This is also the best way 
 		// to ensure that path reversals (ie over-shrunk paths) are removed.
+		// However, when both adjacent edges are long enough to contain the point where the 2 offset
+		// edges intersect, there is no reversal to remove and that point is the exact join. Using it
+		// is also more robust, since resolving 3 points (2 of which can be very close to each other)
+		// by the union can leave tiny edges once the intersection is rounded to integer coordinates.
+		if (cos_a > -0.9)
+		{
+			// the vertex on the other side of j than k (open paths are walked forward then backward)
+			const size_t count = path.size();
+			const size_t n = ((k + 1) % count == j) ? (j + 1) % count : (j + count - 1) % count;
+			// distance from path[j] to the intersection's projection on both edges, along the edges
+			const double reach = std::fabs(group_delta_ * sin_a / (cos_a + 1));
+			if (reach * reach <= 0.25 * DistanceSqr(path[j], path[k]) &&
+				reach * reach <= 0.25 * DistanceSqr(path[j], path[n]))
+			{
+				DoMiter(path, j, k, cos_a);
+				return;
+			}
+		}
 #ifdef USINGZ
         path_out.emplace_back(GetPerpendic(path[j], norms[k], group_delta_), path[j].z);
         path_out.emplace_back(path[j]); // (#405, #873, #916)
